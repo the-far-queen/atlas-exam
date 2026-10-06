@@ -32,11 +32,35 @@ class StructureTests(unittest.TestCase):
         11-13 for the model-facing contract, 14-18 for capabilities
         that exist but are never called, 19-22 for actuation, which is
         the only block that cannot be measured from inside a process."""
-        self.assertEqual(AREA_COUNT, 22)
-        self.assertEqual(len(AREAS), 22)
+        self.assertEqual(AREA_COUNT, 23)
+        self.assertEqual(len(AREAS), 23)
 
     def test_area_numbers_are_contiguous_from_1(self):
-        self.assertEqual([n for n, _ in AREAS], list(range(1, 23)))
+        self.assertEqual([n for n, _ in AREAS], [0] + list(range(1, 23)))
+
+    def test_area_zero_exists_and_is_first(self):
+        """AREA 0 IS PROCESS INTEGRITY.
+
+        It is not a property of the substrate. It grades the process
+        that produces every other verdict, and it was missing for an
+        entire session in which five consecutive attempts were made
+        without once checking whether my own arithmetic was wrong.
+
+        If this area is ever removed, the exam stops examining its own
+        examiner -- which is precisely how the 2026-10-06 session went.
+        """
+        self.assertEqual(AREAS[0][0], 0)
+        self.assertEqual(AREAS[0][1], "process_integrity")
+
+    def test_area_zero_cannot_silently_pass(self):
+        """It must be able to FAIL. If the rules file is absent the area
+        reports FAIL, not SKIP -- an exam that skips its own integrity
+        check has no integrity check."""
+        from exam.cli import area_0_process_integrity
+        r = area_0_process_integrity()
+        self.assertIn(r.status.value, ("PASS", "FAIL"))
+        self.assertTrue(r.does_not_establish,
+                        "area 0 must state its own limit")
 
     def test_the_four_blocks_are_present(self):
         names = {n: nm for n, nm in AREAS}

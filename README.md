@@ -49,7 +49,38 @@ The number to track is **mutation yield** — defects found over defects
 planted — not pass rate. Bobby: *"absolutely do not shoot for above 95%;
 wasted compute, errors are normal."*
 
-## the ten areas
+## AREA 0 — PROCESS INTEGRITY
+
+The first area, and it is not a property of the substrate. It grades
+the process that produces every other verdict.
+
+It exists because on 2026-10-06 I made five consecutive attempts at a
+PID loop — change the plant, change the gains, change the plant again,
+add a filter — without once asking whether my own arithmetic was
+wrong. A five-line trace would have shown the derivative term spiking
+on the first run.
+
+The same session, three times, I reported a surprising result as a
+finding when it was my own bug:
+
+| reported | actually |
+|---|---|
+| "the filter does not help PID" | my filtered derivative was wrong |
+| "bandpass keeps 0% of energy" | record too short to resolve the band |
+| "one bump escapes 100%" | the detector was mislabelling basins |
+
+Full rules: [`CENTRAL-RULES.md`](CENTRAL-RULES.md) — also in the hermes
+root and SOUL.md's sole note, which loads every session.
+
+**The rule:** *diagnose before adjusting.* Run it as-is and read the
+output **before** changing a parameter. Substituting a plausible next
+attempt for a check on the current one is the shape of every mistake.
+
+Area 0 can only establish that the rules are **written** and that the
+area **exists**. Whether I followed them is not measurable from inside
+the run that followed them — that limit is stated in the area itself.
+
+## the areas
 
 Decomposed against the Boeing 747 as a certifier, in
 [`docs/ten-areas-vs-747.md`](docs/ten-areas-vs-747.md).

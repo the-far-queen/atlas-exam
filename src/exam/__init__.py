@@ -58,9 +58,15 @@ Run: python src/exam.py --list
 
 __version__ = "0.1.0"
 
-AREA_COUNT = 22
+AREA_COUNT = 23
 
 AREAS = [
+    # AREA 0 IS NOT A PROPERTY OF THE SYSTEM. It is a property of the
+    # process that is trying to qualify the system, and it outranks
+    # everything else for the same reason the pilot question does:
+    # without it, every other verdict is produced by an unexamined
+    # procedure.
+    (0, "process_integrity"),
     # substrate: what the thing IS
     (1, "refusal"),
     (2, "identity"),

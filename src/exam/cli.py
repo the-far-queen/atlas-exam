@@ -36,13 +36,67 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from typing import Dict, List
 
 from .result import AreaResult, ExamReport, Status, make, skip, todo
 from . import substrate as sub
 from . import reachability as reach
-from . import UNWIRED_RISK
+from . import AREAS, UNWIRED_RISK
+
+# the central process rules. area 0 checks these exist and that it is
+# declared; it cannot check whether they were followed.
+PROCESS_RULES = os.path.join(
+    os.path.expanduser('~'), 'AppData', 'Local', 'hermes', 'CENTRAL-RULES.md')
+
+
+# ---------------------------------------------------------------------------
+# AREA 0 -- PROCESS INTEGRITY. the first area because it judges the
+# examiner, and it is the one that was missing for an entire session.
+# ---------------------------------------------------------------------------
+
+def area_0_process_integrity() -> AreaResult:
+    """Rules that must hold of the process producing every other verdict.
+
+    2026-10-06. On a PID loop I made five attempts -- change plant,
+    change gains, change plant again, add a filter -- without once
+    asking whether my own arithmetic was wrong. A five-line trace
+    would have shown the derivative term spiking on the FIRST run.
+
+    The defect is not bad tuning. It is:
+
+        substituting a plausible next attempt
+            for a check on the current one
+
+    Three times the SAME SESSION I reported a surprising result as a
+    finding when it was my own bug:
+        "the filter does not help PID"      -> my filter was wrong
+        "bandpass keeps 0% of energy"       -> record too short to resolve
+        "one bump escapes 100%"             -> detector mislabelling basins
+
+    So this area checks the examiner, and it runs first.
+    """
+    checks = {
+        "process rule file present":
+            os.path.isfile(PROCESS_RULES),
+        "process rule file non-trivial":
+            os.path.getsize(PROCESS_RULES) > 1500
+            if os.path.isfile(PROCESS_RULES) else False,
+        "exam declares this area":
+            any(n == 0 for n, _ in AREAS),
+    }
+    bad = [k for k, v in checks.items() if not v]
+    return make(
+        0, "process_integrity", not bad,
+        (f"process rules present at {PROCESS_RULES} and this area is "
+         f"declared; every other verdict depends on this one holding")
+        if not bad else f"NOT HELD: {bad}",
+        "that the process is correct. it can only establish that the "
+        "rules are WRITTEN and this area exists -- whether I FOLLOWED "
+        "them is not measurable from inside the run that followed them.",
+        {"rules_file": PROCESS_RULES, "checks": checks},
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -349,7 +403,8 @@ def area_18_selfcoding() -> AreaResult:
 def run() -> ExamReport:
     present = sub.substrate_present()
     if not present["simself"]:
-        results = [skip(n, name, "simself source not present")
+        results = [area_0_process_integrity()]
+        results += [skip(n, name, "simself source not present")
                    for n, name in [(1, "refusal"), (2, "identity"),
                                    (3, "boundedness"), (4, "liveness"),
                                    (5, "return")]]
@@ -361,6 +416,7 @@ def run() -> ExamReport:
                     area_22_planning()]
         return ExamReport(results)
     return ExamReport([
+        area_0_process_integrity(),
         area_1_refusal(), area_2_identity(), area_3_boundedness(),
         area_4_liveness(), area_5_return(),
         a6(), a7(), a8(), a9(), a10(),
