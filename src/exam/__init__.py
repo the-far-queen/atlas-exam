@@ -58,9 +58,10 @@ Run: python src/exam.py --list
 
 __version__ = "0.1.0"
 
-AREA_COUNT = 10
+AREA_COUNT = 22
 
 AREAS = [
+    # substrate: what the thing IS
     (1, "refusal"),
     (2, "identity"),
     (3, "boundedness"),
@@ -71,4 +72,40 @@ AREAS = [
     (8, "observability"),
     (9, "envelope"),
     (10, "exam_self_check"),
+    # model-facing: the trust placed in the thing
+    (11, "interface"),
+    (12, "resource"),
+    (13, "adversarial"),
+    # capabilities: things that exist and are not called
+    (14, "dreaming"),
+    (15, "mode_transition"),
+    (16, "spawning"),
+    (17, "extraction"),
+    (18, "self_coding"),
+    # actuation: the only areas that require changing something outside
+    # this process. every other metric is passive and can be checked
+    # from inside a single run -- these cannot, which is why they were
+    # missing entirely rather than merely unimplemented.
+    (19, "tools"),
+    (20, "skills"),
+    (21, "initiative"),
+    (22, "planning"),
 ]
+
+# Declared capabilities and the modules that implement them.
+#
+# 2026-10-06 AST call-graph audit: ALL FIVE HAVE ZERO INBOUND CALLERS.
+# They import cleanly and nothing constructs them. An area that measures
+# only the substrate reports HELD while these sit unwired beside it.
+#
+# These are checked by reachability, so an area FAILS while unwired
+# rather than being silently absent from the count.
+UNWIRED_RISK = {
+    "dreaming": "constitutional/dreaming.py",
+    "mode_transition": "constitutional/harness.py",
+    "extraction": "constitutional/repo_scanner.py",
+    "spawning": "research/agent_pool.py",
+    "self_coding": "coding_operator_object.py",
+    # actuation areas have no module to audit yet -- they need a
+    # sandbox to be measured in at all.
+}

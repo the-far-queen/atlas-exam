@@ -27,12 +27,24 @@ from exam import AREAS, AREA_COUNT  # noqa: E402
 
 
 class StructureTests(unittest.TestCase):
-    def test_exactly_ten_areas(self):
-        self.assertEqual(AREA_COUNT, 10)
-        self.assertEqual(len(AREAS), 10)
+    def test_area_count_matches_declaration(self):
+        """22 as of 2026-10-06. The count grew from 10 -> 17 -> 22:
+        11-13 for the model-facing contract, 14-18 for capabilities
+        that exist but are never called, 19-22 for actuation, which is
+        the only block that cannot be measured from inside a process."""
+        self.assertEqual(AREA_COUNT, 22)
+        self.assertEqual(len(AREAS), 22)
 
-    def test_area_numbers_are_1_to_10(self):
-        self.assertEqual([n for n, _ in AREAS], list(range(1, 11)))
+    def test_area_numbers_are_contiguous_from_1(self):
+        self.assertEqual([n for n, _ in AREAS], list(range(1, 23)))
+
+    def test_the_four_blocks_are_present(self):
+        names = {n: nm for n, nm in AREAS}
+        self.assertEqual(names[1], "refusal")
+        self.assertEqual(names[11], "interface")
+        self.assertEqual(names[14], "dreaming")
+        self.assertEqual(names[19], "tools")
+        self.assertEqual(names[22], "planning")
 
     def test_area_names_are_unique(self):
         names = [nm for _, nm in AREAS]
@@ -57,9 +69,9 @@ class ScoringRuleTests(unittest.TestCase):
 
     def test_all_pass_gives_pass(self):
         r = ExamReport([make(i, f"a{i}", True, "ok", "limit")
-                        for i in range(1, 11)])
+                        for i in range(1, AREA_COUNT + 1)])
         self.assertEqual(r.verdict(), "PASS")
-        self.assertEqual(r.passed, 10)
+        self.assertEqual(r.passed, AREA_COUNT)
 
     def test_empty_report_is_not_pass(self):
         self.assertEqual(ExamReport([]).verdict(), "NOT RUN")
@@ -73,7 +85,7 @@ class ScoringRuleTests(unittest.TestCase):
 
     def test_every_area_declares_a_limit(self):
         """R3."""
-        for i in range(1, 11):
+        for i in range(1, AREA_COUNT + 1):
             r = make(i, f"a{i}", True, "ok", "does not establish X")
             self.assertTrue(r.does_not_establish.strip())
 
