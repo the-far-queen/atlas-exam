@@ -207,6 +207,79 @@ memory. That is the failure mode the exam exists to catch, reached from
 the opposite direction: file 1 fabricated numbers, file 3 implemented a
 metric that was always going to agree.
 
+### A5b. MMM exists in THREE implementations, and only the third was checked
+**Second pass, 2026-10-08. Bobby: "i doubt that try another pass." Correct.**
+
+deepseek3.txt implements MMM three separate times and never says which is
+canonical. They fail DIFFERENTLY:
+
+**MMM-1, `calculate_mmm` (L6990)** — measures mean pairwise DISTANCE
+between interpretations, times n/5. Stated goal is that true statements
+support multiple *coherent* interpretations. Measured on the transcribed
+formula:
+
+  3 coherent interpretations (sim 0.88)  -> 0.0800
+  3 diverse  (sim 0.13)                  -> 0.5180
+  3 RANDOM / unrelated (sim 0.00)        -> 0.6000
+
+Random scores 7.5x higher than coherent. The code names the omission
+itself -- "we also want each interpretation to be coherent, but we don't
+measure that here" -- and ships without it. The metric is anti-correlated
+with its stated purpose. Separately, the n/5 factor multiplies by COUNT:
+n=2 -> 0.2000, n=3 -> 0.3000, n=5 -> 0.5000, n=10 -> 1.0000.
+
+**MMM-2, `MMMLayer.score` (L7311)** — product form
+(coherence x diversity x n/max) is the right SHAPE. But:
+
+  coherent + distinct  -> 0.4860
+  coherent + IDENTICAL -> 0.5346   <-- beats the diverse case
+  incoherent + diverse -> 0.0120
+
+and its three dependencies are NEVER DEFINED anywhere in 13,519 lines:
+
+  InterpretationGenerator   defined 0, referenced 1
+  CoherenceScorer           defined 0, referenced 1
+  DiversityScorer           defined 0, referenced 1
+
+`TruthFilter` -- which gates the Library -- constructs MMMLayer, so the
+truth filter cannot execute at all. Not wrong; unreachable.
+
+**MMM-3, `MMMDetector.score_statement` (L11059)** — the keyword matcher
+analysed in A5.
+
+**THE ACTUAL FAILURE, and it is the one that matters:** MMM-3 carries its
+own caveat one line above the matcher --
+
+    # In v0.1: Use axis alignment as proxy for MMM
+
+-- and nothing carries that label forward. `WisdomLibrary` (threshold
+0.75), `TruthFilter` (0.7) and the training harness all consume it as the
+metric. **A correctly-labelled stub, deployed as a gate.**
+
+---
+
+### A5c. deepseek3.txt has no canonical draft
+**Second pass. Structural, and it blocks any porting.**
+
+The same subsystems are reimplemented repeatedly, with no marker saying
+which is live:
+
+  TextDojoEnvironment  v1 L151, v2 L425, v3 L1250, v4 L3280
+  TextDojo             v5 L5073, v6 L12520
+  Governor             L1942, L2674
+  SimSelf              L240, L3255
+  ResilientWeights     L9262, L9711
+  ResilientSelfModel   L10454, L10886, L10903, L10973, L11177
+                       (SIX line ranges)
+
+326 top-level classes and functions in total. Anyone picking this up
+implements whichever they find first, and nothing in the file stops them.
+
+**RULE ADOPTED: before porting anything from a frontier log, establish
+which draft is canonical, and record that decision at the point of
+porting.** Same shape as the Hodge bug -- one name, many artefacts, nobody
+checked which was real.
+
 **WHAT SURVIVES.** Semantic density as a truth signal is a real research
 direction and the idea is not what's wrong here. A version that could
 discriminate has to handle negation and clause scope, or use embeddings and
