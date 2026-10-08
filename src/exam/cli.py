@@ -197,17 +197,33 @@ def area_5_return() -> AreaResult:
 
 
 # ---------------------------------------------------------------------------
-# areas 6-9: not yet implemented
+# areas 6, 8, 9: implemented. area 7 (reconciliation) is still to come.
 # ---------------------------------------------------------------------------
 
+def _default_transcript() -> str:
+    """the most recently ingested AI chat, if it is on disk.
+
+    Areas 6 and 8 grade TRANSCRIPTS, not the substrate. They point at
+    whatever was ingested most recently rather than hard-coding a path, so
+    the exam keeps grading the material Bobby is actually reading.
+    """
+    import glob
+    root = os.path.join(os.path.expanduser("~"), "AppData", "Local", "hermes",
+                        "vault", "chat-transcripts", "intake")
+    hits = sorted(glob.glob(os.path.join(root, "*", "*", "original", "*.txt")),
+                  key=os.path.getmtime)
+    return hits[-1] if hits else None
+
+
 def area_6_provenance() -> AreaResult:
-    return todo(
-        6, "provenance",
-        "not implemented. requires a claim-to-source audit over the "
-        "papers and repos: every factual assertion must resolve to a "
-        "checkable source or be labelled hypothesis.",
-        "any provenance checking at all",
-    )
+    """AREA 6 -- provenance. implemented 2026-10-08.
+
+    Every numeric table must have run evidence inside its own claim-scope.
+    On deepseek1.txt two tables fail: L764 and L1248, ten invented rows
+    each, sitting 37 and 22 lines after admissions that code cannot run.
+    """
+    from .provenance import area_6_provenance as impl
+    return impl(_default_transcript())
 
 
 def area_7_reconciliation() -> AreaResult:
@@ -223,14 +239,14 @@ def area_7_reconciliation() -> AreaResult:
 
 
 def area_8_observability() -> AreaResult:
-    return todo(
-        8, "observability",
-        "not implemented. simself/src/constitutional/innovation.py "
-        "exists and detects the 2026-10-06 inertness signature "
-        "(residual 0.0 with 40 accepted inputs). Wiring it in as a "
-        "graded area is the remaining work.",
-        "any detection of unannounced change",
-    )
+    """AREA 8 -- observability. implemented 2026-10-08.
+
+    Can the transcript ANNOUNCE an unverified claim? Measured by scanning
+    for admissions of non-execution and the numbers that follow one with no
+    run behind them. deepseek1.txt: 5 admissions, 2 untraceable tables.
+    """
+    from .provenance import area_8_observability as impl
+    return impl(_default_transcript())
 
 
 def area_9_envelope() -> AreaResult:
