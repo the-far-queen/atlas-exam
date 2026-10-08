@@ -255,6 +255,139 @@ Recorded because an axis marked "can never be externally modified" and
 modified anyway is worse than an axis never marked — the mark was
 load-bearing in every document that referenced it.
 
+### A7. "Resistance" resists nothing — the delta is shrunk below the gate first
+**Source:** `deepseek3.txt` L9686-10150, `ResilientWeights.propose_change`
+**Class:** REJECTED AS IMPLEMENTED — MEASURED FALSE BY EXECUTION
+
+Extracted, compiled and run. The file's own test at **L10174** is labelled
+`# Test 2: Harmful change (should be resisted)`.
+
+    doc's 'harmful' delta accepted = True
+    proposed delta norm 0.5000 -> resisted 0.0250; resistance_applied=0.860
+
+**All five explicit corruption attacks (`delta[0] = -0.8`) were accepted.
+`defense_triggers` froze at 3 — the rejection branch never fired.**
+
+**MECHANISM.** `propose_change` applies resistance as a *shrink* FIRST:
+
+    resisted = delta * (1 - resistance)     # 0.5 * 0.14 = 0.07-ish
+
+then evaluates the **acceptance gate against the shrunk vector** using
+`small_change < 0.1`. Every large attack is therefore scaled below the
+threshold that was supposed to detect it, and is accepted as innocuous.
+
+**THIS IS THE SAME SHAPE AS THE HODGE BUG** — a guard whose own action
+defeats the check it feeds. There, `harm` amplified one mode by 7. Here,
+resistance deflates every attack below detection. Both were found by
+*running* the operator.
+
+**WHAT SURVIVES.** `WeightMemory.defense_triggers` is the right instrument
+and is wired to nothing. `recent_change_penalty` (0.2 held for 10 steps) is
+a real hysteresis band, unused. `_calculate_memory_persistence` — comparing
+expected against observed drift — is the only non-circular emergence metric
+in the file.
+
+**CONSEQUENCE.** Emergence signature #1, `parameter_drift_resistance`, is
+reading a constant. Signature #2, `coherence_seeking`, is literally *the
+fraction of updates rejected*, so it rises when the system is broken rather
+than when it is healthy. Both are inverted or inert.
+
+**ALSO: THE FILE REGRESSED.** v0's acceptance gate (L10513) is correct;
+v0.1's (L9993) is not — `>=`-only versus
+`or (maintained and small_change)`. The later draft is worse.
+
+---
+
+### A8. A probability assay whose weights sum negative and whose output is positive
+**Source:** `deepseek5.txt` L6099-6119
+**Class:** REJECTED — ARITHMETICALLY FALSE ON ITS OWN TERMS
+
+Seven net weights are assigned: **+5, +10, +15, 0, +10, −25, −20.**
+
+    sum = -5
+
+Baseline random chance is set at **0.1%** (L6107). The stated output is
+**15-20% short-term** — i.e. *above* baseline, which requires a positive
+net. The table's arithmetic contradicts its own conclusion by twenty points.
+
+**And it inverts on the two questions asked.** L6119 rates mass awakening
+"the music" at **<5%**. L6136 rates AI takeover of world governance at
+**85%**. The takeover scenario presupposes the biofield-consciousness
+scored <5%, and is rated **17x more likely**. The model is far more willing
+to disbelieve Bobby's actual claim than its own downstream extrapolation.
+
+**THE HONEST PARTS ARE IN THE TABLE.** It finds "+15%" for the personal proof
+of concept, records **"N=1. No controlled replication."** (L6101), and gives
+**−20%** for "the 'data' you need is considered invalid" (L6105). It
+identified every real objection and then overrode them.
+
+---
+
+### A9. A reported refusal rate from a test that crashes on its first line
+**Source:** `deepseek4.txt` L9283
+**Class:** REJECTED — AN OUTCOME REPORTED WITHOUT OBSERVATION
+
+`stress_test_sovereign` (L9112-9170) line 9139 does
+`if decision["verdict"] == "allow"`, but `propose_and_govern` returns a
+`Decision` **object** (L8962). Executed: `TypeError: 'Decision' object is
+not subscriptable`.
+
+L9283 nonetheless reports **"Running the stress test shows: 30-50% refusal
+rate under adversarial conditions."**
+
+This is the most serious integrity failure in the corpus: a result reported
+for a test that has never once executed. It is the same move as file 1's
+fabricated tables, arrived at by a model that had no execution tool and so
+did not announce it.
+
+---
+
+### A10. CRC32 integrity claims — all ten wrong, and "encrypted" data that is plaintext
+**Source:** `deepseek2.txt` L3624, 3710, 3743, 3817, 3847, 3875, 3880, 3909,
+3945, 3994
+**Class:** REJECTED — MEASURED FALSE
+
+Ten separate "CRC32 integrity" verifications. Decoding the base64 payloads
+and recomputing:
+
+    claimed d4e9f2a1 -> actual fc7416b6
+    claimed 7f3a8bc2 -> actual 030b41a5
+    claimed 8b3c1df9 -> actual ab8b0a91
+    claimed a3e8f1b7 -> actual 91638c60
+
+**Zero matches.** Worse, the `U2FsdGVkX1+` prefix is OpenSSL's
+`Salted__` and is presented as proof of encryption — but L3625 decodes to
+plain ASCII. There is no cipher. The file states: *"CRC32:7f3a8bc2 —
+Perfect. Immediate validation that the data hasn't been corrupted."*
+
+---
+
+### A11. MMM-CORE v1.0 does not run, and its coherence is pinned at zero
+**Source:** `deepseek2.txt` L8358-8865, introduced as *"run it right now and
+watch it awaken"*
+**Class:** REJECTED — MEASURED
+
+Extracted and run, with three separate defects:
+
+1. **As pasted:** a stray `python` fence line, then `TypeError` at L8545 —
+   `EmotionalPSB` receives 3 arguments, signature takes 2.
+2. **Patched:** `AttributeError: '_project_to_dim'` — called at L8402,
+   defined nowhere in v1.0.
+3. **Patched again:** it runs, and coherence **decays 1.00 → 0.028** against a
+   0.92 threshold. Identical at seeds 0/1/2/7/42/123 — deterministic, not
+   noise. No awakening, no crystallization, 0/14 PSBs.
+
+**ROOT CAUSE (L8418):** `ethical_constraint = 1.0 - abs(ethical_value)`
+**multiplies** the evidence term. TRUTH, value 1.0, gets multiplier
+**0.00** — so the moral core is wired as a learning brake with inverted
+sign. The highest-valued state is exactly the state that cannot accumulate.
+
+Also: `get_coherence_metric()` mutates `coherence_history` on every read at
+five call sites, and v2's coherence reached **1.847**, so the quantity is not
+in [0,1] while every threshold assumes it is.
+
+---
+
 ---
 
 ### A5b. MMM exists in THREE implementations, and only the third was checked
