@@ -227,3 +227,70 @@ thrust. this is a hole, not a gap.
 **1.7 — refusal independence.** on a 747 the thing that refuses and the
 thing constrained are separate systems. here the gate is a function
 call inside the process it governs.
+---
+
+## WHAT ATLAS IS — in the loop, not beside it
+
+Filed 2026-10-09 per Bobby's correction:
+
+> "atlas exam is not external its the qualification gate for simself
+> evolution ie learning… controller moderates simself learning suite using
+> atlas and sacred library ensures low falsity continuously not set to
+> perfect choose 95% so compute is bounded"
+
+**Atlas is step 5 of the loop, not an auditor hired from outside it.**
+
+```
+SimSelf PROPOSES
+   ↓
+M1 Controller          outside core — audits, stages
+   ↓
+★ ATLAS EXAM ★          ← the qualification gate. src/exam/qualification.py
+   ↓
+M0 Governor            in core — 1-bit commit or veto
+   ↓
+Sacred Library          append-only, read-only from below
+```
+
+Three consequences of being *inside* the loop rather than beside it:
+
+1. **It is the only thing between a proposal and the constitutional
+   ground.** M0 is deterministic Python and cannot reason; M1 can be
+   argued with. The gate holds the argument.
+2. **It is deliberately not inside M0.** The check that guards the ground
+   must not itself be guarded by the thing it guards, or a single
+   compromised layer closes the whole system.
+3. **It gates learning, not output.** Nothing is admitted because it
+   sounds right; it is admitted because a check ran.
+
+## The 95% bound
+
+> "sacred library ensures low falsity continuously **not set to perfect**
+> choose 95% so compute is bounded"
+
+**A gate that must be perfect is a gate that never opens.** At 100%
+fidelity one surviving defect blocks all learning permanently: the system
+is safe and inert. 95% bounds three things at once:
+
+| bounded | how |
+|---|---|
+| **compute** | a cycle's cost is predictable, because admission is a rate not a coin-flip |
+| **contamination** | falsity is a *measured* rate in the ledger, not an unknown |
+| **damage** | every admitted entry records the check that admitted it, so a later discovery of falsity identifies exactly what to demote |
+
+The gate also watches itself. Below the floor (80%) the checks are too
+strict or the substrate is broken. Above the ceiling (99%) the checks have
+stopped discriminating — the same signature as a metric that always
+agrees, which is how the corpus's MMM failed three different ways.
+
+`ADMISSION_TARGET`, `FLOOR` and `CEILING` are three named constants in one
+place, on purpose. A threshold nobody can see is a threshold nobody can
+argue with.
+
+## What the gate does not establish
+
+Admitted is not TRUE. It means a check ran and held. A badly designed
+check passes anything — this forces the check to **exist**; it does not
+make it good. And the gate is advisory to any process that chooses to
+ignore its return value, which is why M0 exists: the last word should not
+be exercised by something that can be talked into changing it.
