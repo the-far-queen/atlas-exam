@@ -95,8 +95,39 @@ Decomposed against the Boeing 747 as a certifier, in
 | 6 | provenance — can every claim be traced | TODO |
 | 7 | reconciliation — do derivations agree | TODO |
 | 8 | observability — is change announced | TODO |
-| 9 | envelope — what is declared | TODO |
+| 9 | envelope — what is declared | **HELD** |
 | 10 | self-check — can the exam tell working from broken | **HELD** |
+
+**AREA 9 — envelope (implemented 2026-10-08)**
+
+The blocker, per the old README. Now measured, with five declared limits
+across three subsystems and four accepted out-of-range responses
+(REFUSE / CLAMP / PROJECT / DIVERGE — silence is not on the list).
+
+A limit counts only if all four hold:
+
+- **D1** a finite numeric bound, not a word
+- **D2** the quantity it bounds
+- **D3** the stated behaviour when exceeded
+- **D4** a verifier that resolves to a real, runnable probe
+
+D4 is the 747 rule: a certified system has a test per certified limit.
+It was added because the mutation check found the hole — a limit of 1e300
+is finite, so D1 passed, and E3 only probes hodge_cycle, so a limit
+declared for an unprobed subsystem sailed through. A *second* mutation then
+found that a verifier merely *naming* a probe was accepted, so the name is
+now resolved against `KNOWN_PROBES`.
+
+Measured, by subprocess probe:
+
+```
+inside  damping 0.4   rho 0.8200   peak |x| 0.0593   bounded, as declared
+outside damping 0.0   rho 1.2361   crosses 1e6 at step 82   as declared
+```
+
+`does not establish` that the limits are tight — only that they are
+declared, numeric, sourced, verified, and that measured behaviour matches
+them. Whether the envelope is narrow enough is area 10's job.
 
 **23 HELD · 17 OPEN · 13 ABSENT · 0 VOID**
 
@@ -106,10 +137,12 @@ them as passes.
 ## current verdict
 
 ```
-passed 6/10        VERDICT: FAIL
+passed 8/23        VERDICT: FAIL
 ```
 
-correct, and deliberately unflattering. Areas 6–9 are not written.
+correct, and deliberately unflattering. Areas 6, 7 and 8 are still not
+written; 9 is now measured. FAIL is the right verdict and it stays right
+until every area holds.
 
 ## run
 
@@ -123,7 +156,9 @@ python -c "import sys;sys.path.insert(0,'src');from exam.cli import _main;_main(
 
 **9 — envelope.** everything else is un-actionable without it. no
 declared limit means no test can be complete, because nobody can say
-what "outside" means.
+what "outside" means. **NOW HELD** — see above. What it still does not do
+is certify that the declared bounds are tight; a system declaring +/-1e6
+passes area 9 while being effectively unbounded.
 
 **4.2 — motion direction.** areas 1–5 all pass with a system that
 moves the *wrong way*. the 747 proves its engines produce the right

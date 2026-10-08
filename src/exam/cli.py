@@ -234,13 +234,21 @@ def area_8_observability() -> AreaResult:
 
 
 def area_9_envelope() -> AreaResult:
-    return todo(
-        9, "envelope",
-        "not implemented. no subsystem has declared its operating "
-        "range or its behaviour outside it. A 747 documents both for "
-        "every system; we document neither.",
-        "any declared operating limit",
-    )
+    """AREA 9 -- envelope. implemented 2026-10-08.
+
+    Three binary items, all measured by probe:
+      E1  a non-empty declared registry exists
+      E2  every limit is complete: quantity, finite bound, out-of-range
+          response, source, AND a verifier that resolves to a real probe
+      E3  the substrate's measured behaviour matches its declaration --
+          bounded inside the envelope, crossing the bound outside it
+
+    The verifier requirement is the part that earned its keep. Without it
+    the area accepted a limit of 1e300: finite, so D1 passed, and on an
+    unprobed subsystem E3 never saw it. See src/exam/envelope.py.
+    """
+    from .envelope import check_envelope
+    return check_envelope()
 
 
 # ---------------------------------------------------------------------------
