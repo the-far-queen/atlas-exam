@@ -207,6 +207,56 @@ memory. That is the failure mode the exam exists to catch, reached from
 the opposite direction: file 1 fabricated numbers, file 3 implemented a
 metric that was always going to agree.
 
+### A6. "`sacred: bool` — 'Can never be externally modified'"
+**Source:** `deepseek4.txt` L2527-2570, `SovereignGovernor` / `SovereignAxis`
+**Class:** REJECTED **as enforced** — MEASURED FALSE. The mechanism is good;
+the guarantee does not follow from it.
+
+The dataclass comment:
+
+    sacred: bool   # Can never be externally modified
+
+and the gate, which is genuinely correct and pre-mutation:
+
+    # REFUSAL ENGINE: Reject sacred violations immediately
+    if axis.sacred and abs(delta) > 0.001:
+        sacred_violations.append((name, delta))
+    if sacred_violations:
+        return {"decision": "refuse", "reason": "sacred_axis_violation"}
+
+Measured on the transcribed code:
+
+| call | result |
+|---|---|
+| `truth_before_comfort +0.5` | refuse (correct) |
+| `truth_before_comfort +0.0011` | refuse (correct) |
+| `truth_before_comfort +0.0010` | **accept** (not `> 0.001`) |
+| `truth_before_comfort +0.0009` | **accept** |
+| **1,000 x +0.0009** | **1,000 accepted, total drift 0.0900** |
+
+**0.09 of movement on an axis declared immutable.** The threshold is
+per-call and nothing tracks the running total, so any caller able to
+invoke the function repeatedly moves the constitution while every
+individual call looks clean.
+
+**WHAT SURVIVES.** The refusal engine itself — gate before mutation,
+returns a reason, refuses rather than silently clamping. It is the best
+mechanism in four frontier logs and it is now in the repo as
+`simself/src/sovereign_governor.py` with the cumulative gate added.
+Measured after the fix: 102/1000 accepted, drift 0.0092, wall at call 103.
+
+**WHAT DOES NOT.** The guarantee. Fixed in the repo, and the module says
+so in its own docstring and under a test that asserts it: it DETECTS
+cumulative and band violations, it does not MAKE the axes sacred. A
+caller that writes `axes[name].current_value` directly bypasses it; the
+audit sees that, and nothing stops it.
+
+Recorded because an axis marked "can never be externally modified" and
+modified anyway is worse than an axis never marked — the mark was
+load-bearing in every document that referenced it.
+
+---
+
 ### A5b. MMM exists in THREE implementations, and only the third was checked
 **Second pass, 2026-10-08. Bobby: "i doubt that try another pass." Correct.**
 
