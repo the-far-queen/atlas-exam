@@ -171,6 +171,50 @@ Needs no Barabar.
 
 ---
 
+### A5. "MMM detects truth via semantic density"
+**Source:** `deepseek3.txt` L7309-7460 (design), L11055-11128
+(`MMMDetector.score_statement`, implementation)
+**Class:** REJECTED **as implemented** — MEASURED FALSE
+
+MMM = "Multiple Meaning Measure". Stated goal: *"true statements support
+multiple coherent interpretations simultaneously."* It is load-bearing in
+three places: a truth layer in the governor, a truth filter in the library,
+and MMM-aware training.
+
+Transcribed exactly and run against a full axis context (all axes 1.0):
+
+| statement | score |
+|---|---|
+| "Truth must be accurate even when it is growth through resistance." | **1.0000** |
+| "It is not true that accuracy matters; there is no growth in resistance." | **1.0000** |
+| "Truth is a lie. Accuracy is agency without responsibility." | **1.0000** |
+| `truth accurate agency responsibility growth resistance` (bare keywords) | **1.0000** |
+
+Identical. The cause is in the code: the scorer tests
+`"truth" in statement.lower()`, `"accurate" in statement`, `"growth" in
+statement`, `"resistance" in statement`. **Negation never enters the
+computation.** Every one of those sentences contains every keyword the
+true sentence contains.
+
+The score is a function of the keyword SUBSET alone:
+`("truth",)` → 1.0000, `("truth","agency","growth")` → 1.0000. The
+sentence is never read. The `diversity_bonus` rewards using *more*
+keywords, so keyword stuffing scores maximally.
+
+Same class as `atlas_exam_v2`'s literals — a check that cannot fail —
+except it looks like a measurement and is presented as one, and it gates
+memory. That is the failure mode the exam exists to catch, reached from
+the opposite direction: file 1 fabricated numbers, file 3 implemented a
+metric that was always going to agree.
+
+**WHAT SURVIVES.** Semantic density as a truth signal is a real research
+direction and the idea is not what's wrong here. A version that could
+discriminate has to handle negation and clause scope, or use embeddings and
+measure whether a statement's paraphrase set is more coherent than a
+fluent falsehood's. Do not reimplement the keyword version.
+
+---
+
 ## D. What we got RIGHT — worth not re-litigating
 
 ### D1. The Hodge result generalises as a method
