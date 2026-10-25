@@ -66,7 +66,44 @@ def inbound_references(src_root: str, stem: str,
             for node in ast.walk(tree):
                 kind = None
                 if isinstance(node, ast.ImportFrom):
-                    if any(a.name == stem for a in node.names):
+                    # TWO WAYS TO IMPORT A MODULE, AND THE FIRST VERSION
+                    # OF THIS AUDIT ONLY CAUGHT ONE.
+                    #
+                    # It counted an ImportFrom only when one of the
+                    # IMPORTED NAMES equalled the stem:
+                    #
+                    #     from x import NAME        counted if NAME == stem
+                    #
+                    # But the normal way to import a module's PUBLIC
+                    # CLASS is:
+                    #
+                    #     from .harness import Harness
+                    #
+                    # where the module is `.harness` and the name is
+                    # `Harness`. The module is in node.module (with
+                    # node.level saying how many dots to strip) and the
+                    # SYMBOL is in node.names. So the rule missed every
+                    # module imported for its class -- which is most of
+                    # them.
+                    #
+                    # MEASURED: the audit reported constitutional/harness.py
+                    # as UNWIRED with zero inbound references, while
+                    # simself/src/constitutional/__init__.py contains
+                    # `from .harness import Harness`. The module WAS
+                    # wired; the audit could not see it.
+                    #
+                    # So the rule is now: the MODULE being imported is
+                    # what counts, resolved from node.module and
+                    # node.level, and the imported names are checked
+                    # too so `from x import y` still counts.
+                    mod = node.module or ""
+                    if mod:
+                        # strip the package prefix and compare the leaf
+                        leaf = mod.split(".")[-1]
+                        if leaf == stem:
+                            kind = "from-import-module"
+                    if kind is None and any(a.name == stem
+                                            for a in node.names):
                         kind = "from-import"
                 elif isinstance(node, ast.Import):
                     if any(a.name.split(".")[0] == stem for a in node.names):
