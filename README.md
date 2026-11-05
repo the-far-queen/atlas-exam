@@ -191,11 +191,25 @@ blind areas. It is neither. Two of the eight mutations were also wrong
 on the first attempt, and both were fixed rather than the measurement
 bent.
 
-AND ONE OF THE EIGHT IS WEAKER THAN THE OTHER SEVEN, and it is named
-as such: **area 22 grades a plan-state implementation that lives inside
-its own probe**, not in the substrate. The substrate supplies the
-component names; the `Plan` and `Step` classes the area grades are the
-probe's own. Its mutation is therefore applied to the probe.
+AND ONE OF THE EIGHT WAS WEAKER THAN THE OTHER SEVEN, and it is now
+fixed rather than merely named. **Area 22 used to grade a plan-state
+implementation that lived inside its own probe**, not in the substrate:
+the `Plan` and `Step` classes the area graded were the probe's own, so
+the substrate's plan behaviour was never what the area measured.
+
+The plan state machine now lives in the substrate, at
+`simself/src/plan_state.py`, and the substrate's own planner
+(`simself/src/executive_planner.py`) produces plans with it. Area 22
+therefore grades the SUBSTRATE, and its mutation is applied to the
+substrate's file. There is now no path by which any of the eight
+grades the exam's own code.
+
+AND THE AREA GOT STRONGER WHILE MOVING: the substrate refuses a plan
+whose dependencies form a cycle at CONSTRUCTION, so the area can now
+check that (the probe's inline copy had no such check at all, so the
+area never measured it), and the same plan run with nothing failing
+must COMPLETE, so the area cannot pass on a structure that can only
+fail.
 
 **AREA 9 — envelope (implemented 2026-10-08)**
 

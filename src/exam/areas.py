@@ -176,9 +176,12 @@ AREA_DECLS: List[AreaDecl] = [
                  "and that the attempt is on the record either way.")),
     AreaDecl(22, "planning", AreaState.LIVE, "exam/planning.py",
              does_not_establish=(
-                 "that the plan is good. It establishes that a plan is STATE: "
-                 "ordered steps, named dependencies, and a path that can be "
-                 "abandoned.")),
+                 "that the plan is good. It establishes that a plan is "
+                 "STATE: ordered steps, named dependencies, a represented "
+                 "partial failure, and a path that can be abandoned. And "
+                 "it establishes that on the SUBSTRATE's own plan state "
+                 "machine, in simself/src/plan_state.py -- not on a copy "
+                 "inside this exam.")),
 ]
 
 BY_NUMBER: Dict[int, AreaDecl] = {d.number: d for d in AREA_DECLS}
