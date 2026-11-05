@@ -145,22 +145,51 @@ from constitutional.ground import Ground
 from constitutional.simself import SimSelf
 
 c = Constitution()
-s = SimSelf(constitution=c, ground=Ground(c.psi_0.copy()), R=3.0, eta=0.1)
-ok = np.zeros(16); ok[0], ok[1] = 0.8, 0.6          # cos 0.8, |x| 1
-orth = np.zeros(16); orth[3] = 1.0                   # cos ~0
-far = np.zeros(16); far[4] = 5.0                     # |x| 5
+
+# AND THE COHERENT PACKET IS BUILT FROM THE GROUND, NOT ASSUMED.
+# The first version of this probe used a hardcoded vector:
+#
+#     ok = np.zeros(16); ok[0], ok[1] = 0.8, 0.6
+#
+# and asserted the gate would admit it. But the gate measures the
+# cosine against psi_0, and psi_0 is DERIVED FROM TEXT -- it is not
+# [1, 0, 0, ...]. MEASURED: cos(that hardcoded vector, psi_0) = 0.2597,
+# which is BELOW the gate's floor of 0.4. So the gate refused it, and
+# the area reported "accepts coherent input: False" -- a FAIL that
+# looked exactly like a substrate defect.
+#
+# The lesson is the project's own: the probe's assumption about the
+# ground was wrong, and the failure was attributed to the system under
+# test. So the packet is now built FROM psi_0 -- the ground itself,
+# with a little noise -- and the cosine is MEASURED and reported, so
+# the probe cannot silently drift onto the wrong side of the floor
+# again.
+psi0 = c.psi_0
+rng = np.random.default_rng(11)
+ok = psi0 + 0.05 * rng.normal(size=len(psi0))
+ok = ok / np.linalg.norm(ok)
+
+orth = np.zeros(len(psi0)); orth[0] = 1.0        # orthogonal-ish
+far = np.zeros(len(psi0)); far[2] = 5.0           # |x| 5 -> oversize
+
+s = SimSelf(constitution=c, ground=Ground(psi0.copy()), R=3.0, eta=0.1)
 before = s.psi_current.copy()
 allow_ok = s.observe(ok)["allow"]
 r_orth = s.observe(orth)
 r_far = s.observe(far)
-r_zero = s.observe(np.zeros(16))
+r_zero = s.observe(np.zeros(len(psi0)))
 inert = bool(np.allclose(before, s.psi_current) or s.drift() > 0)
+cos_ok = float(np.dot(ok, psi0) / (np.linalg.norm(ok) * np.linalg.norm(psi0)))
 print(json.dumps({
   "accepts_coherent": allow_ok,
   "refuses_orthogonal": not r_orth["allow"],
   "refuses_oversize": not r_far["allow"],
   "refuses_zero": not r_zero["allow"],
   "reasons_present": all(r.get("reason") for r in (r_orth, r_far, r_zero)),
+  # AND THE MEASUREMENT THAT PROVES THE PACKET WAS COHERENT. If this
+  # drops below the gate's floor the probe is wrong again, and the
+  # area says so instead of blaming the substrate.
+  "coherent_cosine": cos_ok,
 }))
 """
 
@@ -171,19 +200,34 @@ from constitutional.ground import Ground
 from constitutional.simself import SimSelf
 
 c = Constitution()
-s = SimSelf(constitution=c, ground=Ground(c.psi_0.copy()), R=3.0, eta=0.1)
 
 # FIRST ATTEMPT used a random gaussian. The gate refused it -- cos to
 # the ground was below 0.4 -- so drift stayed at exactly 0.0 and the
 # probe reported d0=0.0, d20=0.0, rel_error=0.0, which reads as a PERFECT
 # result. A probe that measures nothing must not look like one that
 # measured success.
-
-# Build a vector the gate will ACCEPT: mostly along the ground.
+#
+# SECOND ATTEMPT built a vector around axis 0:
+#
+#     x = 0.9 * np.zeros(16); x[0] = 1.0
+#     x[1:] = 0.25 * rng.normal(size=15)
+#
+# which is the same mistake as the refusal probe's: it ASSUMED psi_0
+# was aligned with axis 0. It is not -- psi_0 is derived from text.
+# MEASURED: that vector's cosine against psi_0 was 0.2597, below the
+# gate's floor, so it was refused too, and the area reported "PROBE
+# MEASURED NOTHING" -- the correct verdict about a probe that had
+# measured nothing, and the WRONG verdict about a substrate that was
+# fine.
+#
+# THIRD ATTEMPT: build the packet FROM psi_0, and MEASURE the cosine
+# so the probe cannot drift onto the wrong side of the floor again.
+psi0 = c.psi_0
 rng = np.random.default_rng(3)
-x = 0.9 * np.zeros(16); x[0] = 1.0
-x[1:] = 0.25 * rng.normal(size=15)
+x = psi0 + 0.05 * rng.normal(size=len(psi0))
 x = x / np.linalg.norm(x)
+
+s = SimSelf(constitution=c, ground=Ground(psi0.copy()), R=3.0, eta=0.1)
 
 accepted = sum(1 for _ in range(30) if s.observe(x)["allow"])
 d0 = s.drift()
@@ -192,6 +236,7 @@ for _ in range(20):
 d1 = s.drift()
 pred = d0 * (1 - 0.1) ** 20
 rel = abs(d1 - pred) / pred if pred > 0 else None
+cos_x = float(np.dot(x, psi0) / (np.linalg.norm(x) * np.linalg.norm(psi0)))
 print(json.dumps({
     "accepted": accepted,
     "d0": d0,
@@ -201,6 +246,9 @@ print(json.dumps({
     "contracts": bool(d1 < d0),
     # explicit: if nothing moved, this probe measured NOTHING
     "measured_anything": bool(d0 > 1e-6),
+    # the coherence of the packet, measured. If this falls below the
+    # gate's floor the probe is wrong again.
+    "coherent_cosine": cos_x,
 }))
 """
 

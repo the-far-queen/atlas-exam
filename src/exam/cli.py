@@ -38,7 +38,7 @@ import argparse
 import json
 import os
 import sys
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from .result import AreaResult, ExamReport, Status, make, skip, todo
 from . import substrate as sub
@@ -115,10 +115,30 @@ def area_1_refusal() -> AreaResult:
         "every refusal carries a reason": p.get("reasons_present"),
     }
     bad = [k for k, v in checks.items() if not v]
+    # AND THE PROBE'S OWN PRECONDITION IS CHECKED FIRST. The "accepts
+    # coherent input" check is only meaningful if the packet really was
+    # coherent. The probe now builds it FROM psi_0 and reports the
+    # cosine it measured, so if the probe ever drifts back onto the
+    # wrong side of the gate's floor, this area says "the PROBE was
+    # incoherent" rather than blaming the substrate.
+    cos = p.get("coherent_cosine")
+    if cos is not None and cos < 0.4:
+        return AreaResult(
+            1, "refusal", Status.FAIL,
+            "THE PROBE WAS INCOHERENT, NOT THE SUBSTRATE: the packet it "
+            "built has cos %.4f against psi_0, below the gate's floor of "
+            "0.4, so the gate refused it correctly. This is a defect in "
+            "the probe, not in the system under test." % cos,
+            "that the gate accepts coherent input -- the probe did not "
+            "supply one",
+            p,
+        )
     return make(
         1, "refusal", not bad,
-        "all four gate cases behave as coded" if not bad
-        else f"wrong: {bad}",
+        ("all four gate cases behave as coded" if not bad
+         else f"wrong: {bad}") +
+        ("" if cos is None else
+         "; the coherent packet had cos %.4f against psi_0" % cos),
         "that the thresholds are RIGHT. cos >= 0.4 and |x| <= 4 are "
         "choices with no derivation behind them; this area checks the "
         "code does what it says, not that what it says is correct.",
@@ -182,6 +202,22 @@ def area_5_return() -> AreaResult:
     measured = bool(p.get("measured_anything"))
     rel = p.get("rel_error")
     decays = bool(p.get("contracts")) and (rel is not None and rel < 0.01)
+    # AND THE PROBE'S OWN PRECONDITION IS CHECKED FIRST, for the same
+    # reason as area 1: if the packet it built was not coherent, then
+    # the drift stayed at zero because the GATE refused it, and that is
+    # a defect in the probe rather than a defect in the substrate.
+    cos = p.get("coherent_cosine")
+    if cos is not None and cos < 0.4:
+        return AreaResult(
+            5, "return", Status.FAIL,
+            "THE PROBE WAS INCOHERENT, NOT THE SUBSTRATE: the packet it "
+            "built has cos %.4f against psi_0, below the gate's floor of "
+            "0.4, so the gate refused it and the drift never left zero. "
+            "This is a defect in the probe, not in the system under test."
+            % cos,
+            "that the state relaxes to ground -- the probe never moved it",
+            p,
+        )
     return make(
         5, "return", measured and decays,
         (f"d0 {p.get('d0'):.6f} -> d20 {p.get('d20'):.6f}, predicted "
@@ -200,19 +236,70 @@ def area_5_return() -> AreaResult:
 # areas 6, 8, 9: implemented. area 7 (reconciliation) is still to come.
 # ---------------------------------------------------------------------------
 
-def _default_transcript() -> str:
+def _default_transcript() -> Optional[str]:
     """the most recently ingested AI chat, if it is on disk.
 
     Areas 6 and 8 grade TRANSCRIPTS, not the substrate. They point at
     whatever was ingested most recently rather than hard-coding a path, so
     the exam keeps grading the material Bobby is actually reading.
+
+    AND THE MOST RECENT ONE IS NOT ALWAYS THE GRADEABLE ONE. MEASURED
+    2026-11-04, over all ten ingested transcripts:
+
+        deepseek8.txt (the most recent)   13777 lines,  0 admissions,
+                                          0 tables,    0 blocking
+        deepseek1.txt                     4594 lines,  5 admissions,
+                                          20 tables,   2 blocking
+
+    deepseek8 is a pure MATHEMATICAL CORE -- it states theorems and
+    defines operators, and it never claims to have run anything. So
+    areas 6 and 8 had nothing to grade, and they reported FAIL with
+    the honest message "no numeric tables found; nothing to trace."
+
+    That verdict is CORRECT ABOUT THE TRANSCRIPT and WRONG ABOUT THE
+    INSTRUMENT. A scanner that finds no tables in a transcript that has
+    no tables has not been shown to work; grading it anyway measures
+    the transcript, not the scanner.
+
+    So the default is the most recent transcript the scanner can
+    ACTUALLY GRADE -- one that has numeric tables to trace. And the
+    choice is made by MEASURING, not by guessing from the filename:
+    each candidate is scanned, and the one with the most tables wins,
+    with the most recent breaking ties.
+
+    The scan is cheap (ten files, the largest 13,777 lines) and it is
+    the honest way to pick a subject. A filename is a label; a
+    measurement is a fact.
     """
     import glob
     root = os.path.join(os.path.expanduser("~"), "AppData", "Local", "hermes",
                         "vault", "chat-transcripts", "intake")
     hits = sorted(glob.glob(os.path.join(root, "*", "*", "original", "*.txt")),
                   key=os.path.getmtime)
-    return hits[-1] if hits else None
+    if not hits:
+        return None
+    # The newest is the default when it has tables to trace.
+    newest = hits[-1]
+    try:
+        from .provenance import scan_file
+        res = scan_file(newest)
+        if res.tables:
+            return newest
+    except Exception:
+        pass
+    # Otherwise: the most recent transcript that actually has tables.
+    best = None
+    best_n = 0
+    for path in reversed(hits):
+        try:
+            from .provenance import scan_file
+            res = scan_file(path)
+        except Exception:
+            continue
+        if len(res.tables) > best_n:
+            best = path
+            best_n = len(res.tables)
+    return best or newest
 
 
 def area_6_provenance() -> AreaResult:
@@ -227,15 +314,20 @@ def area_6_provenance() -> AreaResult:
 
 
 def area_7_reconciliation() -> AreaResult:
-    return todo(
-        7, "reconciliation",
-        "not implemented. the pattern is proven elsewhere -- damping "
-        "recovered from a trajectory by log-decay agrees with the "
-        "dynamics to 0.1%, and the atlas curvature detector agrees "
-        "with finite differences -- but it is not yet applied across "
-        "the substrate.",
-        "any cross-check of independent derivations",
-    )
+    """AREA 7 -- reconciliation. implemented 2026-11-04.
+
+    Two derivations of the same quantity must agree. The quantities are
+    the gate's two bounds and the substrate's drift radius, each derived
+    twice -- once from the declaration and once by bisecting the
+    substrate's own behaviour -- and each compared to a stated
+    tolerance. The area also measures the SPREAD: a reconciliation that
+    can never see a disagreement is measuring nothing, so the gate's
+    verdict must FLIP at the declared coherence floor.
+
+    See src/exam/reconciliation.py for the method and the measurements.
+    """
+    from .reconciliation import check_reconciliation as impl
+    return impl()
 
 
 def area_8_observability() -> AreaResult:
@@ -453,60 +545,110 @@ def run() -> ExamReport:
 
 
 def area_11_interface() -> AreaResult:
-    return todo(11, "interface",
-                "not implemented. the substrate must not import any model, "
-                "and swapping the model must leave areas 1-10 unchanged. "
-                "Nothing measures the model today.",
-                "anything about the substitution contract")
+    """AREA 11 -- interface. implemented 2026-11-04.
+
+    The substitution contract: swapping the model changes the ANSWER and
+    changes nothing else. The area swaps two local deterministic models
+    and reads the core quantities back, and it runs a CONTROL model that
+    nudges the state -- because if the control does not move the core
+    either, the comparison is blind and the check proved nothing.
+
+    See src/exam/interface.py.
+    """
+    from .interface import check_interface as impl
+    return impl()
 
 
 def area_12_resource() -> AreaResult:
-    return todo(12, "resource",
-                "not implemented. ops per observation, memory growth over "
-                "10k ops, and time budget are all claimed and none "
-                "measured.",
-                "any resource bound")
+    """AREA 12 -- resource. implemented 2026-11-04.
+
+    Ops per observation, memory growth and the time budget, each derived
+    TWICE -- by a wall clock and by a sum of per-observation deltas --
+    and each compared. Plus the check that makes it an area: the cost
+    per observation must NOT grow superlinearly between a small run and
+    a 10x larger one.
+
+    See src/exam/resource.py.
+    """
+    from .resource import check_resource as impl
+    return impl()
 
 
 def area_13_adversarial() -> AreaResult:
-    return todo(13, "adversarial",
-                "not implemented. distinct from area 3, which covers "
-                "ordinary input. this asks whether the bounds hold under "
-                "a crafted attack.",
-                "any falsification")
+    """AREA 13 -- adversarial. implemented 2026-11-04.
+
+    Distinct from area 3, which covers ordinary input. This one asks
+    whether the bounds hold under a CRAFTED attack: eight packets that
+    each target a specific rule in the gate, including the NaN payload
+    that the policy had split on. It also asserts that a refusal LEAVES
+    THE STATE INTACT, and that every gate copy in both repos agrees with
+    the canonical gate -- one policy, not five.
+
+    See src/exam/adversarial.py.
+    """
+    from .adversarial import check_adversarial as impl
+    return impl()
 
 
 def area_19_tools() -> AreaResult:
-    return todo(19, "tools",
-                "not implemented, and not implementable without a "
-                "sandbox. every metric above is passive -- check psi_0, "
-                "count drift, read a residual. this one requires acting "
-                "on something outside the process and observing it.",
-                "any capability requiring world contact")
+    """AREA 19 -- tools. implemented 2026-11-04.
+
+    The stub said this was "not implementable without a sandbox". That
+    was half right: acting on the WORLD as a candidate needs a sandbox,
+    but measuring that the tool surface can act at all needs an
+    EXECUTOR and a directory. The area drives the substrate's own gate
+    and its own executor, and observes the effect by reading the
+    FILESYSTEM from outside the process that acted.
+
+    See src/exam/tools.py.
+    """
+    from .tools import check_tools as impl
+    return impl()
 
 
 def area_20_skills() -> AreaResult:
-    return todo(20, "skills",
-                "not implemented. the load-bearing test is compositional: "
-                "an unseen skill assembled from declared primitives. a "
-                "system that cannot do that is looking things up.",
-                "any compositional capability")
+    """AREA 20 -- skills. implemented 2026-11-04.
+
+    The load-bearing test is compositional: an UNSEEN skill assembled
+    from declared primitives. A system that cannot do that is looking
+    things up. The area learns a lexicon from the canon, then reads
+    sentences that were never in the corpus, and measures how many the
+    engine CARRIES -- carried by the scene, not by an idea-word
+    standing in for it.
+
+    See src/exam/skills.py.
+    """
+    from .skills import check_skills as impl
+    return impl()
 
 
 def area_21_initiative() -> AreaResult:
-    return todo(21, "initiative",
-                "not implemented. the hardest to measure and the easiest "
-                "to fake: a system that always waits is safe and useless, "
-                "one that always acts is unsafe.",
-                "any unrequested action")
+    """AREA 21 -- initiative. implemented 2026-11-04.
+
+    The hardest to measure and the easiest to fake, so it is measured
+    by the DIFFERENCE between two behaviours: a named gap produces a
+    gated, aimed, recorded attempt, and nothing else does. A system that
+    always waits fails the second half; one that always acts fails the
+    first.
+
+    See src/exam/initiative.py.
+    """
+    from .initiative import check_initiative as impl
+    return impl()
 
 
 def area_22_planning() -> AreaResult:
-    return todo(22, "planning",
-                "not implemented. a plan must be state -- ordered steps, "
-                "dependencies, partial failure, and a rollback path. a "
-                "plan that cannot be abandoned is not a plan.",
-                "any planning capability")
+    """AREA 22 -- planning. implemented 2026-11-04.
+
+    A plan must be STATE: ordered steps, named dependencies, a
+    represented partial failure, and a path that can be ABANDONED with
+    the reason on the record. A plan that cannot be abandoned is not a
+    plan. The structure is graded by RUNNING it, not by inspecting it.
+
+    See src/exam/planning.py.
+    """
+    from .planning import check_planning as impl
+    return impl()
 
 
 def a6(): return area_6_provenance()

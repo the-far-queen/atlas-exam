@@ -153,10 +153,49 @@ Decomposed against the Boeing 747 as a certifier, in
 | 4 | liveness — does it move | **HELD** |
 | 5 | return — does it recover | **HELD** |
 | 6 | provenance — can every claim be traced | **HELD** |
-| 7 | reconciliation — do derivations agree | TODO |
+| 7 | reconciliation — do derivations agree | **HELD** |
 | 8 | observability — is change announced | **HELD** |
 | 9 | envelope — what is declared | **HELD** |
 | 10 | self-check — can the exam tell working from broken | **HELD** |
+| 11 | interface — does the model move the core | **HELD** |
+| 12 | resource — what does one observation cost | **HELD** |
+| 13 | adversarial — do the bounds hold under attack | **HELD** |
+| 14 | dreaming — is it reachable | **HELD** |
+| 15 | mode transition — is it reachable | **HELD** |
+| 16 | spawning — is it reachable | **HELD** |
+| 17 | extraction — is it reachable | **HELD** |
+| 18 | self-coding — is it reachable | **HELD** |
+| 19 | tools — does the gate refuse, and does the effect show | **HELD** |
+| 20 | skills — can an unseen sentence be carried | **HELD** |
+| 21 | initiative — does a named gap act, and nothing else | **HELD** |
+| 22 | planning — is a plan state | **HELD** |
+
+**THE EIGHT THAT WERE HOLES (implemented 2026-11-04, mutation-checked
+2026-11-05).** Areas 7, 11, 12, 13, 19, 20, 21 and 22 were `TODO` and
+are now real measuring instruments.
+
+An area that has only ever reported PASS is not evidence of anything,
+so each of the eight was shown able to go RED: `tools/mutation_check_exam_areas.py`
+breaks one thing the area measures and requires the area to notice.
+**MEASURED 2026-11-05: 8 of 8 mutations DETECTED**, with a green
+baseline first — because a broken area that always FAILs would "detect"
+every mutation.
+
+Each mutation is applied to a SCRATCH COPY of the substrate, with
+`expanduser("~")` pointed at the scratch, so the live substrate is never
+mutated. **AND THE FIRST VERSION OF THAT HARNESS DETECTED 0 OF 8**,
+because the probes assemble their import path at runtime and the
+rewrite never matched — and a harness that reports "no mutant detected"
+for eight broken areas looks exactly like a harness that found eight
+blind areas. It is neither. Two of the eight mutations were also wrong
+on the first attempt, and both were fixed rather than the measurement
+bent.
+
+AND ONE OF THE EIGHT IS WEAKER THAN THE OTHER SEVEN, and it is named
+as such: **area 22 grades a plan-state implementation that lives inside
+its own probe**, not in the substrate. The substrate supplies the
+component names; the `Plan` and `Step` classes the area grades are the
+probe's own. Its mutation is therefore applied to the probe.
 
 **AREA 9 — envelope (implemented 2026-10-08)**
 
@@ -197,12 +236,24 @@ them as passes.
 ## current verdict
 
 ```
-passed 8/23        VERDICT: FAIL
+passed 21/23       VERDICT: FAIL
 ```
 
-correct, and deliberately unflattering. Areas 6, 7 and 8 are still not
-written; 9 is now measured. FAIL is the right verdict and it stays right
-until every area holds.
+correct, and deliberately unflattering. The two failures are areas 6
+and 8, which grade a real ingested transcript and find real numbers in
+it with no run behind them -- untraceable at L764 and L1248. Those two
+are FAILING HONESTLY, which is the exam doing its job; the verdict
+stays FAIL until every area passes.
+
+**23 of 23 areas are IMPLEMENTED.** The eight that were holes (7, 11,
+12, 13, 19, 20, 21, 22) were built on 2026-11-04 and each was shown able
+to go RED on 2026-11-05.
+
+AND "implemented" IS NOW A MEASUREMENT. `src/exam/areas.py` is the
+registry: it declares every area LIVE, STUB or DARK, with a reason for
+the ones that are not LIVE, and `tests/test_areas.py` checks the
+registry against the actual run -- because a registry that says LIVE
+while the implementation raises is a registry that lies.
 
 ## run
 
@@ -210,6 +261,8 @@ until every area holds.
 python -m pytest tests/ -q          # the exam testing itself
 python -c "import sys;sys.path.insert(0,'src');from exam.cli import _main;_main(['--run'])"
 python -c "import sys;sys.path.insert(0,'src');from exam.cli import _main;_main(['--list'])"
+python -m exam.areas                 # the registry: what is measured, what is declared
+python tools/mutation_check_exam_areas.py   # the eight new areas, shown able to go RED
 ```
 
 ## the three that matter most
