@@ -77,6 +77,14 @@ FIELDCORE_SRC = os.path.join(WORK_REPOS, "fieldcore", "src")
 
 PROBE_TIMEOUT_S = 180
 
+#: The request the substrate's planner is asked to plan.
+REQUEST = "Build a thing that reads files and writes a report"
+
+#: The step the probe makes fail. It is a FOUNDATION-layer step, so
+#: failing it SKIPS the layers above it -- which is what makes P3
+#: measurable rather than assumed.
+FAIL_AT = "core_logic"
+
 
 def _run(code: str, timeout: int = PROBE_TIMEOUT_S
          ) -> Tuple[bool, Dict[str, Any], str]:
@@ -134,10 +142,13 @@ from executive_planner import SeniorEngineerPlanner
 #     area never measured it
 from plan_state import Plan, Step, StepStatus, PlanStatus
 
+REQUEST = %r
+FAIL_AT = %r
+
 out = {}
 
 planner = SeniorEngineerPlanner()
-d = planner.decompose('Build a thing that reads files and writes a report')
+d = planner.decompose(REQUEST)
 
 out['decomposition'] = {
     'components': list(d.components),
@@ -149,45 +160,54 @@ out['decomposition'] = {
     'understanding': d.understanding,
 }
 
-# --- a plan whose steps have NAMED DEPENDENCIES ------------------------
-names = list(d.components)[:4]
-steps = []
-for i, n in enumerate(names):
-    needs = names[:i] if i < 2 else []
-    steps.append(Step(n, tuple(needs), 'the thing %s produces' % n))
-plan = Plan(steps)
+# --- THE PLAN, FROM THE SUBSTRATE'S OWN PLANNER ------------------------
+# NOT assembled here. The steps, their ORDER and their DEPENDENCIES are
+# the substrate's decomposition read as a layered build, so the area
+# measures the SUBSTRATE's plan and not a plan the exam invented.
+#
+# AND THE LAYERS ARE WHY THE FAILURE PROPAGATES. The decomposition's
+# milestones are the layers, and a layer needs the layer before it. So
+# failing a Foundation step SKIPS the Core and Polish steps above it,
+# and the area asserts they were skipped rather than passed.
+plan = planner.plan_for(REQUEST)
 out['plan'] = plan.to_dict()
-out['n_dependencies'] = sum(len(s.needs) for s in steps)
+out['n_steps'] = len(plan.steps)
+out['n_dependencies'] = sum(len(s.needs) for s in plan.steps)
+out['named_dependencies'] = [
+    {'step': s.name, 'needs': list(s.needs)} for s in plan.steps if s.needs]
+
+# --- THE SUBSTRATE'S OWN STATUS VOCABULARY ----------------------------
+# The exam must not INVENT the words it grades against, or it would be
+# grading its own vocabulary. So the probe reports the substrate's own
+# enum values, and the checks below compare against THESE.
+out['step_statuses'] = {s.name: s.value for s in StepStatus}
+out['plan_statuses'] = {s.name: s.value for s in PlanStatus}
+
+# --- P1: the order is DECLARED, and it is STABLE ------------------------
+# Two plans built from the same request must have the same order, and
+# the order must not be an accident of a set's iteration.
+plan2 = planner.plan_for(REQUEST)
+out['repeat_order_matches'] = ([s.name for s in plan.steps]
+                               == [s.name for s in plan2.steps])
+out['order_matches_components'] = ([s.name for s in plan.steps]
+                                   == list(d.components))
 
 # --- P3: PARTIAL FAILURE, and the steps that depend on it are SKIPPED --
-# AND THE DEPENDENCIES ARE A CHAIN, so the skip path is actually
-# EXERCISED. The first version of this probe gave step 0 no
-# dependencies and step 1 the dependency on step 0 -- so when step 1
-# failed, steps 2 and 3 (which depended on nothing) still ran, and the
-# area reported "0 dependent step(s) were skipped rather than passed".
-# The check PASSED, but it had measured a plan where the failure
-# propagated nowhere.
-#
-# So the chain is now step N depends on step N-1. A failure at step 1
-# must skip steps 2 and 3, and the area asserts they were skipped.
-#
-# AND THE FAILURE IS NOW RAISED BY THE RUNNER, because the substrate's
+# AND THE FAILURE IS RAISED BY THE RUNNER, because the substrate's
 # `run` takes a callable -- the substrate decides what a raised error
 # MEANS for the rest of the plan, which is the behaviour the area is
 # for.
-plan_fail = Plan([Step(n, tuple(names[:i]), n)
-                  for i, n in enumerate(names)])
-_failing = names[1] if len(names) > 1 else None
+plan_fail = planner.plan_for(REQUEST)
 
 def _runner(step):
-    if _failing is not None and step.name == _failing:
+    if step.name == FAIL_AT:
         raise RuntimeError('this step failed on purpose')
 
 plan_fail.run(_runner)
 out['partial_failure'] = plan_fail.to_dict()
 
 # --- P4: THE PLAN CAN BE ABANDONED ------------------------------------
-plan_abandon = Plan([Step(n, (), n) for n in names])
+plan_abandon = planner.plan_for(REQUEST)
 plan_abandon.abandon('the exam is measuring the abandonment')
 out['abandoned'] = plan_abandon.to_dict()
 
@@ -202,15 +222,13 @@ try:
 except ValueError:
     out['cycle_refused'] = True
 
-# --- and the PLANNER's own decomposition is ordered --------------------
-out['planner_order_is_stable'] = True
-p2 = SeniorEngineerPlanner()
-d2 = p2.decompose('Build a thing that reads files and writes a report')
-out['planner_order_is_stable'] = (list(d2.components) == list(d.components))
-out['planner_repeat_matches'] = (d2.components == d.components)
+# --- and the plan runs to completion when nothing fails -----------------
+plan_ok = planner.plan_for(REQUEST)
+plan_ok.run(lambda step: None)
+out['completed'] = plan_ok.to_dict()
 
 print(json.dumps(out))
-"""
+""" % (REQUEST, FAIL_AT)
 
 
 def check_planning() -> AreaResult:
@@ -242,35 +260,57 @@ def check_planning() -> AreaResult:
     plan = data["plan"]
     partial = data["partial_failure"]
     abandoned = data["abandoned"]
+    completed = data["completed"]
+
+    # THE SUBSTRATE'S OWN STATUS WORDS. The exam does not invent the
+    # vocabulary it grades against -- it asks the substrate what its
+    # statuses are called, and compares against those. Otherwise the
+    # exam would be grading its own spelling of the substrate's states.
+    SS = data["step_statuses"]
+    PS = data["plan_statuses"]
+    measured["step_statuses"] = sorted(SS.values())
+    measured["plan_statuses"] = sorted(PS.values())
+
     measured["planner_components"] = dec["n_components"]
     measured["planner_milestones"] = len(dec["milestones"])
     measured["planner_risks"] = dec["n_risks"]
-    measured["plan_steps"] = len(plan["steps"])
+    measured["plan_steps"] = data["n_steps"]
     measured["plan_dependencies"] = data["n_dependencies"]
 
     # ---- P1: the plan is ordered ---------------------------------------
-    if len(plan["steps"]) < 2:
+    if data["n_steps"] < 2:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
             detail="the plan has %d step(s). A plan with one step has no "
                    "order to violate, and an order that cannot be "
-                   "violed is not an order." % len(plan["steps"]),
+                   "violated is not an order." % data["n_steps"],
             does_not_establish="that the plan is ordered",
             measured=measured,
         )
-    if not data["planner_repeat_matches"]:
+    if not data["repeat_order_matches"]:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
             detail="the substrate's own planner produced a DIFFERENT "
-                   "ordering on the second run with the same request. A "
+                   "ordering on the second build of the same request. A "
                    "plan whose order varies between two identical "
-                   "requests cannot be executed twice.",
+                   "requests cannot be run twice.",
             does_not_establish="that the plan is ordered",
             measured=measured,
         )
-    parts.append("P1: the plan has %d steps in a declared order, and the "
-                 "substrate's planner produced the same ordering twice for "
-                 "the same request" % len(plan["steps"]))
+    if not data["order_matches_components"]:
+        return AreaResult(
+            number=22, name="planning", status=Status.FAIL,
+            detail="the plan's step order does not match the order of the "
+                   "decomposition it was built from. A plan whose order is "
+                   "not the decomposition's order has an order that came "
+                   "from somewhere else.",
+            does_not_establish="that the plan is ordered",
+            measured=measured,
+        )
+    parts.append("P1: the plan has %d steps in a declared order that "
+                 "matches its decomposition, and the substrate's planner "
+                 "produced the same ordering twice for the same request"
+                 % data["n_steps"])
 
     # ---- P2: the dependencies are named --------------------------------
     if data["n_dependencies"] < 1:
@@ -282,7 +322,7 @@ def check_planning() -> AreaResult:
             does_not_establish="that the plan has dependencies",
             measured=measured,
         )
-    named = [s for s in plan["steps"] if s["needs"]]
+    named = data["named_dependencies"]
     if not named:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
@@ -294,8 +334,8 @@ def check_planning() -> AreaResult:
                  % (len(named), data["n_dependencies"]))
 
     # ---- P3: partial failure is represented ---------------------------
-    failed = [s for s in partial["steps"] if s["status"] == "failed"]
-    skipped = [s for s in partial["steps"] if s["status"] == "skipped"]
+    failed = [s for s in partial["steps"] if s["status"] == SS["FAILED"]]
+    skipped = [s for s in partial["steps"] if s["status"] == SS["SKIPPED"]]
     if not failed:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
@@ -305,7 +345,7 @@ def check_planning() -> AreaResult:
             does_not_establish="that partial failure is represented",
             measured=measured,
         )
-    if partial["status"] != "failed":
+    if partial["status"] != PS["FAILED"]:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
             detail="a step failed but the plan's own status is %r, not "
@@ -315,11 +355,12 @@ def check_planning() -> AreaResult:
             measured=measured,
         )
     # AND THE STEPS THAT DEPENDED ON IT MUST BE SKIPPED, not passed.
+    failed_names = {s["name"] for s in failed}
     dependent_skipped = True
     for s in partial["steps"]:
-        if s["status"] == "done":
-            for dep in s["needs"]:
-                if any(f["name"] == dep for f in failed):
+        if s["status"] == SS["DONE"]:
+            for dep in s.get("needs", []):
+                if dep in failed_names:
                     dependent_skipped = False
     if not dependent_skipped:
         return AreaResult(
@@ -380,7 +421,7 @@ def check_planning() -> AreaResult:
                  "a cycle, at construction")
 
     # ---- P4: the plan can be abandoned ---------------------------------
-    if abandoned["status"] != "abandoned":
+    if abandoned["status"] != PS["ABANDONED"]:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
             detail="the plan could not be abandoned (status %r). A plan "
@@ -399,7 +440,7 @@ def check_planning() -> AreaResult:
             measured=measured,
         )
     still_pending = [s for s in abandoned["steps"]
-                     if s["status"] == "pending"]
+                     if s["status"] == SS["PENDING"]]
     if still_pending:
         return AreaResult(
             number=22, name="planning", status=Status.FAIL,
@@ -411,6 +452,32 @@ def check_planning() -> AreaResult:
         )
     parts.append("P4: the plan was abandoned, the reason was recorded, and "
                  "every step says it was skipped")
+
+    # ---- and the plan runs to completion when nothing fails ------------
+    # WITHOUT THIS, THE AREA COULD PASS ON A PLAN THAT CAN ONLY FAIL. A
+    # structure that always reports "failed" satisfies P3 trivially. So
+    # the same plan, run with nothing failing, must COMPLETE, with every
+    # step done.
+    if completed["status"] != PS["COMPLETED"]:
+        return AreaResult(
+            number=22, name="planning", status=Status.FAIL,
+            detail="the plan ran with no failures and its status is %r, not "
+                   "'completed'. A plan that never completes is not a plan."
+                   % completed["status"],
+            does_not_establish="that the plan completes",
+            measured=measured,
+        )
+    not_done = [s for s in completed["steps"] if s["status"] != SS["DONE"]]
+    if not_done:
+        return AreaResult(
+            number=22, name="planning", status=Status.FAIL,
+            detail="the plan ran with no failures and %d step(s) are not "
+                   "done." % len(not_done),
+            does_not_establish="that the plan completes",
+            measured=measured,
+        )
+    parts.append("the same plan with no failure runs to completion with "
+                 "every step done")
 
     return AreaResult(
         number=22, name="planning", status=Status.PASS,

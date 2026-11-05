@@ -69,26 +69,26 @@ THE EIGHT AREAS, AND WHAT EACH MUTATION BREAKS
                          carrying it -> unseen sentences are not carried
     21 initiative      the loop's gate is removed -> nothing is gated,
                          so the attempt is not gated either
-    22 planning        the plan's dependent steps are marked PASSED
+    22 planning        the plan's dependent steps are marked DONE
                          rather than SKIPPED on failure -> a partial
                          failure is not represented
 
-WHAT AREA 22 MEASURES, AND WHY ITS MUTATION IS IN THE PROBE
-------------------------------------------------------------
-MEASURED 2026-11-05: area 22's `Step` and `Plan` classes are defined
-INSIDE the probe, not in the substrate. The substrate supplies only the
-planner's decomposition -- the component names -- and the plan state
-machine the area grades is the probe's own.
+AND NOW EVERY MUTATION HITS THE SUBSTRATE
+------------------------------------------
+MEASURED 2026-11-05: area 22's `Step` and `Plan` classes were defined
+INSIDE the probe, so area 22 graded the EXAM'S OWN CODE and its
+mutation was applied to the exam's own source. It was named as the
+weakest of the eight for exactly that reason.
 
-That is a real finding and it is recorded here rather than hidden: area
-22 grades a plan-state implementation that lives in the exam, so the
-substrate's own plan behaviour is NOT what area 22 measures. Its
-mutation is therefore applied to the PROBE, which is the honest thing to
-mutate: if the probe's own skip-the-dependents logic stops skipping,
-area 22 must notice.
+The plan state machine now lives in the substrate, at
+`simself/src/plan_state.py`, and the substrate's own planner
+(`simself/src/executive_planner.py`) produces plans with it. So area
+22 grades the substrate, and its mutation is applied to the substrate's
+file.
 
-This is the ONE area of the eight whose subject is the exam's own code.
-It is the weakest of the eight and it is named as such.
+There is now NO path by which an area grades the exam's own code, and
+this harness has no way to mutate the exam's own source. That is the
+structural change, not just a re-pointing.
 
 THE HONEST LIMIT
 ----------------
@@ -273,20 +273,26 @@ def m_plan_marks_failed_dependents_passed() -> Tuple[str, str, str, str]:
     it SKIPPED, not silently passed. Mark them passed instead and the
     plan's state lies about what happened.
 
-    MEASURED 2026-11-05: the Plan class this mutation targets is
-    defined INSIDE the probe, not in the substrate, so the mutation is
-    applied to the PROBE SOURCE, in a scratch copy of the exam's own
-    `src/exam/` tree -- never to the live file. That is stated in this
-    file's docstring: area 22 grades the exam's own plan-state code,
-    and it is the weakest of the eight.
+    AND THE MUTATION IS NOW ON THE SUBSTRATE. MEASURED 2026-11-05:
+    this mutation used to target the exam's OWN probe source, because
+    the `Plan` class the area graded was defined inside that probe. The
+    state machine now lives in the substrate, at
+    `simself/src/plan_state.py`, and the area grades THAT. So the
+    mutation is applied to the substrate file -- which is the whole
+    point of the change, and the reason area 22 is no longer the
+    weakest of the eight.
+
+    The line mutated is the one that marks a step whose dependencies
+    are unmet. Changing SKIPPED to DONE makes the plan claim it did
+    work it never did.
 
     The area must report FAIL.
     """
-    return ("probe", "exam/planning.py",
-            "                s.status = 'skipped'\n"
-            "                s.error = 'unmet dependency: %s' % ','.join(unmet)",
-            "                s.status = 'passed'\n"
-            "                s.error = 'unmet dependency: %s' % ','.join(unmet)")
+    return ("simself", "src/plan_state.py",
+            "                step.status = StepStatus.SKIPPED\n"
+            "                step.error = \"unmet dependency: %s\" % \",\".join(unmet)",
+            "                step.status = StepStatus.DONE\n"
+            "                step.error = \"unmet dependency: %s\" % \",\".join(unmet)")
 
 
 MUTATIONS: Dict[int, Tuple[Callable, str]] = {
@@ -365,9 +371,6 @@ def _scratch_home(repo_to_mutate: Optional[str]) -> pathlib.Path:
     if SACRED.is_dir():
         if not _junction(wr / "sacred-library", SACRED):
             _copy_tree(SACRED, wr / "sacred-library")
-
-    # the exam's own tree, for the probe-source mutation.
-    _copy_tree(EXAM_SRC, home / "atlas_exam_src")
     return home
 
 
@@ -379,14 +382,20 @@ def _apply_mutation(home: pathlib.Path, area: int
     IN THE FILE. That is a FAILURE of the harness, not a skip: the area
     would have been measured against an unmutated substrate and reported
     as "did not detect", which would be a lie.
+
+    AND EVERY MUTATION NOW TARGETS THE SUBSTRATE. MEASURED 2026-11-05:
+    area 22's mutation used to be applied to the EXAM'S OWN probe
+    source, because the area graded a `Plan` class defined inside that
+    probe. The plan state machine now lives in the substrate
+    (`simself/src/plan_state.py`), so area 22 grades the substrate and
+    its mutation hits the substrate too. There is no longer any path by
+    which an area grades the exam's own code, so there is no "probe"
+    target here.
     """
     mutate, _ = MUTATIONS[area]
     repo, rel, old, new = mutate()
 
-    if repo == "probe":
-        path = home / "atlas_exam_src" / rel
-    else:
-        path = home / "AppData" / "Local" / "hermes" / "work_repos" / repo / rel
+    path = home / "AppData" / "Local" / "hermes" / "work_repos" / repo / rel
 
     if not path.is_file():
         return False, "file not found in the scratch home: %s" % path
@@ -414,18 +423,15 @@ def _run_area_in_home(area: int, home: pathlib.Path) -> Tuple[str, str]:
     env = dict(os.environ)
     env["HOME"] = str(home)
     env["USERPROFILE"] = str(home)
-    # The exam tree that gets IMPORTED must be the scratch copy, or a
-    # probe-source mutation is never loaded. MEASURED 2026-11-05: the
-    # first version pointed PYTHONPATH at the LIVE tree, so area 22's
-    # mutation was applied to a file nobody imported and the area
-    # MISSED it -- for the same reason a mutation that did not apply
-    # would be missed.
-    exam_src = EXAM_SRC
-    scratch_exam = home / "atlas_exam_src"
-    if scratch_exam.is_dir():
-        exam_src = scratch_exam
+    # The exam tree that gets IMPORTED is the LIVE one. MEASURED
+    # 2026-11-05: the first version pointed PYTHONPATH at a scratch
+    # copy of the exam so that a probe-source mutation would load. No
+    # mutation touches the exam's own source any more -- area 22's
+    # mutation is on the substrate's `plan_state.py` -- so the live
+    # tree is correct, and there is no longer any way for an area to
+    # grade the exam's own code.
     env["PYTHONPATH"] = os.pathsep.join(
-        [str(exam_src), env.get("PYTHONPATH", "")]).strip(os.pathsep)
+        [str(EXAM_SRC), env.get("PYTHONPATH", "")]).strip(os.pathsep)
 
     code = (
         "import json, sys\n"
@@ -502,7 +508,7 @@ def main() -> int:
         total += 1
         mutate, _ = MUTATIONS[area]
         repo, _, _, _ = mutate()
-        home = _scratch_home(None if repo == "probe" else repo)
+        home = _scratch_home(repo)
         try:
             applied, note = _apply_mutation(home, area)
             if not applied:
