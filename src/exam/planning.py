@@ -113,6 +113,27 @@ sys.path.insert(0, os.path.join(os.path.expanduser("~"), "AppData", "Local",
                                 "hermes", "work_repos", "simself", "src"))
 from executive_planner import SeniorEngineerPlanner
 
+# AND THE PLAN STATE IS THE SUBSTRATE'S, NOT THE EXAM'S.
+#
+# MEASURED 2026-11-05: this probe used to DEFINE `class Step` and
+# `class Plan` inline -- 60 lines of the exam's own code -- and then
+# measure THAT. So the area 22 probe graded the exam's own homework:
+# the substrate's plan behaviour was never what the area measured, and
+# the area was named as the weakest of the eight for exactly that
+# reason.
+#
+# The state machine now lives in the substrate, at
+# `simself/src/plan_state.py`, and this probe IMPORTS it. So what the
+# area measures is what the substrate does.
+#
+# AND THE API IS THE SUBSTRATE'S, not the exam's old inline copy:
+#   - `Plan.run(runner)` takes a CALLABLE, not a `fail_on=` name
+#   - `Step.needs` and `Step.status` are TYPED (StepStatus)
+#   - a plan whose dependencies form a CYCLE is refused AT CONSTRUCTION
+#     -- and the exam's inline copy had no such check at all, so the
+#     area never measured it
+from plan_state import Plan, Step, StepStatus, PlanStatus
+
 out = {}
 
 planner = SeniorEngineerPlanner()
@@ -128,76 +149,12 @@ out['decomposition'] = {
     'understanding': d.understanding,
 }
 
-# --- the plan state, built on the substrate's own decomposition -------
-# The plan is the substrate's steps, made EXECUTABLE. Each step names
-# what it needs (dependencies) and what it produces.
-class Step:
-    def __init__(self, name, needs, produces):
-        self.name = name
-        self.needs = list(needs)
-        self.produces = produces
-        self.status = 'pending'      # pending done failed skipped
-        self.error = ''
-
-class Plan:
-    def __init__(self, steps):
-        self.steps = list(steps)
-        self.status = 'ready'        # ready running completed failed abandoned
-        self.abandon_reason = ''
-
-    def run(self, fail_on=None):
-        # The steps run in ORDER, and a step can only run once its
-        # dependencies have run. A step that fails leaves the steps
-        # that depend on it SKIPPED -- not run, not silently passed.
-        self.status = 'running'
-        for s in self.steps:
-            unmet = [n for n in s.needs
-                     if next((x for x in self.steps if x.name == n),
-                             None) is None
-                     or next(x for x in self.steps
-                             if x.name == n).status != 'done']
-            if unmet:
-                s.status = 'skipped'
-                s.error = 'unmet dependency: %s' % ','.join(unmet)
-                continue
-            if fail_on and s.name == fail_on:
-                s.status = 'failed'
-                s.error = 'this step failed on purpose'
-                continue
-            s.status = 'done'
-        if any(s.status == 'failed' for s in self.steps):
-            self.status = 'failed'
-        else:
-            self.status = 'completed'
-        return self
-
-    def abandon(self, reason):
-        # AND THE PLAN CAN BE ABANDONED. The steps that have not run
-        # are marked skipped, and the plan says it was abandoned and
-        # why.
-        self.status = 'abandoned'
-        self.abandon_reason = reason
-        for s in self.steps:
-            if s.status == 'pending':
-                s.status = 'skipped'
-                s.error = 'the plan was abandoned'
-        return self
-
-    def to_dict(self):
-        return {
-            'status': self.status,
-            'abandon_reason': self.abandon_reason,
-            'steps': [{'name': s.name, 'needs': s.needs,
-                       'status': s.status, 'error': s.error}
-                      for s in self.steps],
-        }
-
 # --- a plan whose steps have NAMED DEPENDENCIES ------------------------
 names = list(d.components)[:4]
 steps = []
 for i, n in enumerate(names):
     needs = names[:i] if i < 2 else []
-    steps.append(Step(n, needs, 'the thing %s produces' % n))
+    steps.append(Step(n, tuple(needs), 'the thing %s produces' % n))
 plan = Plan(steps)
 out['plan'] = plan.to_dict()
 out['n_dependencies'] = sum(len(s.needs) for s in steps)
@@ -213,14 +170,37 @@ out['n_dependencies'] = sum(len(s.needs) for s in steps)
 #
 # So the chain is now step N depends on step N-1. A failure at step 1
 # must skip steps 2 and 3, and the area asserts they were skipped.
-plan_fail = Plan([Step(n, names[:i], n) for i, n in enumerate(names)])
-plan_fail.run(fail_on=names[1] if len(names) > 1 else None)
+#
+# AND THE FAILURE IS NOW RAISED BY THE RUNNER, because the substrate's
+# `run` takes a callable -- the substrate decides what a raised error
+# MEANS for the rest of the plan, which is the behaviour the area is
+# for.
+plan_fail = Plan([Step(n, tuple(names[:i]), n)
+                  for i, n in enumerate(names)])
+_failing = names[1] if len(names) > 1 else None
+
+def _runner(step):
+    if _failing is not None and step.name == _failing:
+        raise RuntimeError('this step failed on purpose')
+
+plan_fail.run(_runner)
 out['partial_failure'] = plan_fail.to_dict()
 
 # --- P4: THE PLAN CAN BE ABANDONED ------------------------------------
-plan_abandon = Plan([Step(n, [], n) for n in names])
+plan_abandon = Plan([Step(n, (), n) for n in names])
 plan_abandon.abandon('the exam is measuring the abandonment')
 out['abandoned'] = plan_abandon.to_dict()
+
+# --- AND THE SUBSTRATE REFUSES A CYCLIC PLAN AT CONSTRUCTION ---------
+# AND THE EXAM'S INLINE COPY HAD NO SUCH CHECK, so this was never
+# measured. A plan whose dependencies form a cycle can never be run,
+# and the substrate says so when the plan is BUILT -- before any work
+# is done.
+out['cycle_refused'] = False
+try:
+    Plan([Step('a', ('b',), 'a'), Step('b', ('a',), 'b')])
+except ValueError:
+    out['cycle_refused'] = True
 
 # --- and the PLANNER's own decomposition is ordered --------------------
 out['planner_order_is_stable'] = True
@@ -372,6 +352,32 @@ def check_planning() -> AreaResult:
     parts.append("P3: a failed step is marked failed, the plan's status "
                  "becomes 'failed', and %d dependent step(s) were skipped "
                  "rather than passed" % len(skipped))
+
+    # ---- P5: THE SUBSTRATE REFUSES A PLAN THAT CAN NEVER BE RUN -----
+    # AND THIS CHECK DID NOT EXIST, because the exam's inline copy of
+    # the plan state had NO cycle check at all -- so the area could not
+    # have measured it. Now that the probe imports the substrate's
+    # real `plan_state`, the substrate REFUSES a plan whose
+    # dependencies form a cycle, at CONSTRUCTION -- before any work is
+    # done.
+    #
+    # AND A CYCLE IS WORTH MEASURING: a plan whose dependencies form a
+    # cycle can never be run, and a plan that cannot be run is a
+    # document, not a plan.
+    measured["cycle_refused"] = bool(data.get("cycle_refused"))
+    if not data.get("cycle_refused"):
+        return AreaResult(
+            number=22, name="planning", status=Status.FAIL,
+            detail="the substrate accepted a plan whose dependencies form "
+                   "a cycle. A plan that can never be run is a document, "
+                   "not a plan -- and it should be refused when it is "
+                   "BUILT, before any work is done.",
+            does_not_establish="that the substrate refuses a plan that "
+                               "can never be run",
+            measured=measured,
+        )
+    parts.append("P5: the substrate refuses a plan whose dependencies form "
+                 "a cycle, at construction")
 
     # ---- P4: the plan can be abandoned ---------------------------------
     if abandoned["status"] != "abandoned":
