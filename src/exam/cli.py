@@ -506,10 +506,25 @@ def area_17_extraction() -> AreaResult:
 
 
 def area_18_selfcoding() -> AreaResult:
-    return _reach_area(
-        18, "self_coding", "self_coding",
-        "self-coding must run in a sandbox, compare against the current "
-        "version, and roll back on invariant violation")
+    """AREA 18 -- self-coding. implemented 2026-11-09.
+
+    The stub said: "self-coding must run in a sandbox, compare against
+    the current version, and roll back on invariant violation". Until
+    2026-11-09 this area was graded by REACHABILITY ALONE -- it read
+    "is `coding_operator_object.py` referenced by anything?" and passed,
+    while the module it names had, in its own measured words, NO
+    sandbox, NO comparison against the running system, and NO rollback.
+    So the area passed while establishing none of what it names.
+
+    Now it RUNS the substrate's own cycle against a scratch repository
+    the probe owns: the sandbox isolates, the comparison is against the
+    current version, the rollback restores and disarms, and the stop
+    rule bounds the loop.
+
+    See src/exam/self_coding.py.
+    """
+    from .self_coding import check_self_coding as impl
+    return impl()
 
 
 # ---------------------------------------------------------------------------

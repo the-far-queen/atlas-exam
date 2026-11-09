@@ -111,7 +111,14 @@ UNWIRED_RISK = {
     "mode_transition": "constitutional/harness.py",
     "extraction": "constitutional/repo_scanner.py",
     "spawning": "research/agent_pool.py",
-    "self_coding": "coding_operator_object.py",
+    # "self_coding" was here until 2026-11-09, and its removal is
+    # MEASURED, not tidying. Area 18 was graded by REACHABILITY ALONE
+    # -- "is coding_operator_object.py referenced by anything?" -- and
+    # passed while the module it names had NO sandbox, NO comparison
+    # against the running system, and NO rollback. Reachability is not
+    # a weaker version of the area; it is a DIFFERENT question, and it
+    # passed on one the area does not ask. So the key is gone and the
+    # area RUNS the four shapes instead. See src/exam/self_coding.py.
     # actuation areas have no module to audit yet -- they need a
     # sandbox to be measured in at all.
 }
